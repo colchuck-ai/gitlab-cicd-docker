@@ -1,0 +1,43 @@
+".generate-semver-tags":
+  script: |
+    SEMVER_TAGS=()
+
+    # SemVar regex pulled from https://github.com/semver/semver/issues/981#issue-1943170645
+    # Regex for a semver digit
+    d='0|[1-9][0-9]*'
+    # Regex for a semver pre-release word
+    pw='[0-9]*[a-zA-Z-][0-9a-zA-Z-]*'
+    # Regex for a semver build-metadata word
+    mw='[0-9a-zA-Z-]+'
+
+    if [[ "$SEMVER_STRING" =~ ^($d)\.($d)\.($d)(-(($d|$pw)(\.($d|$pw))*))?(\+($mw(\.$mw)*))?$ ]]; then
+        major="${BASH_REMATCH[1]}"
+        minor="${BASH_REMATCH[2]}"
+        patch="${BASH_REMATCH[3]}"
+        pre_release="${BASH_REMATCH[5]}"
+        pre_release_base=$(echo "$pre_release" | grep -o '^[a-zA-Z-]*')
+        build_metadata="${BASH_REMATCH[10]}"
+
+        echo "major: $major"
+        echo "minor: $minor"
+        echo "patch: $patch"
+        echo "pre_release: $pre_release"
+        echo "pre_release_base: $pre_release_base"
+        echo "build_metadata: $build_metadata"
+
+        if [[ $pre_release && $pre_release_base ]]; then
+            SEMVER_TAGS+=("$major.$minor.$patch-$pre_release" "$major.$minor-$pre_release" "$major-$pre_release" "$pre_release" "$pre_release_base")
+            if [[ $build_metadata ]]; then
+              SEMVER_TAGS+=("$major.$minor.$patch-$pre_release+$build_metadata")
+            fi
+        elif [[ $build_metadata ]]; then
+            SEMVER_TAGS+=("$major.$minor.$patch+$build_metadata")
+        fi
+        
+        if [[ ! $pre_release && ! $build_metadata ]]; then
+            SEMVER_TAGS+=("$major.$minor.$patch" "$major.$minor" "$major" "latest")
+        fi
+    else
+        echo "ERROR: Invalid semantic version string. See https://semver.org/ for more details."
+        exit 1
+    fi

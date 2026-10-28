@@ -1,0 +1,72 @@
+include:
+  - component: ${CI_SERVER_FQDN}/engineering/dev-tools/internal/gitlab-cicd-workflow/workflow@1
+  - component: ${CI_SERVER_FQDN}/engineering/dev-tools/internal/gitlab-cicd-workflow/run-if-protected@1
+  - local: templates/generate-semver-tags.yml
+
+stages:
+  - test
+  - release
+
+test:
+  stage: test
+  script:
+    - SEMVER_STRING=1.2.3
+    - !reference [.generate-semver-tags, script]
+    - expected="1.2.3 1.2 1 latest"
+    - |
+      if [[ "${SEMVER_TAGS[*]}" != "$expected" ]]; then
+        echo "ERROR: expecting '$expected', got '${SEMVER_TAGS[*]}'";
+        exit 1;
+      fi
+    - SEMVER_STRING=1.2.3-beta.1
+    - !reference [.generate-semver-tags, script]
+    - expected="1.2.3-beta.1 1.2-beta.1 1-beta.1 beta.1 beta"
+    - |
+      if [[ "${SEMVER_TAGS[*]}" != "$expected" ]]; then
+        echo "ERROR: expecting '$expected', got '${SEMVER_TAGS[*]}'";
+        exit 1;
+      fi
+    - SEMVER_STRING=1.2.3+build.45
+    - !reference [.generate-semver-tags, script]
+    - expected="1.2.3+build.45"
+    - |
+      if [[ "${SEMVER_TAGS[*]}" != "$expected" ]]; then
+        echo "ERROR: expecting '$expected', got '${SEMVER_TAGS[*]}'";
+        exit 1;
+      fi
+    - SEMVER_STRING=1.2.3-beta.1+build.45
+    - !reference [.generate-semver-tags, script]
+    - expected="1.2.3-beta.1 1.2-beta.1 1-beta.1 beta.1 beta 1.2.3-beta.1+build.45"
+    - |
+      if [[ "${SEMVER_TAGS[*]}" != "$expected" ]]; then
+        echo "ERROR: expecting '$expected', got '${SEMVER_TAGS[*]}'";
+        exit 1;
+      fi
+    - SEMVER_STRING=2.0.0
+    - !reference [.generate-semver-tags, script]
+    - expected="2.0.0 2.0 2 latest"
+    - |
+      if [[ "${SEMVER_TAGS[*]}" != "$expected" ]]; then
+        echo "ERROR: expecting '$expected', got '${SEMVER_TAGS[*]}'";
+        exit 1;
+      fi
+    - SEMVER_STRING=3.0.0
+    - !reference [.generate-semver-tags, script]
+    - expected="3.0.0 3.0 3 latest"
+    - |
+      if [[ "${SEMVER_TAGS[*]}" != "$expected" ]]; then
+        echo "ERROR: expecting '$expected', got '${SEMVER_TAGS[*]}'";
+        exit 1;
+      fi
+
+release:
+  image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/node:20
+  stage: release
+  extends:
+    - .run-if-protected
+  before_script:
+    - npm config set -- //${CI_SERVER_HOST}/api/v4/groups/1234/-/packages/npm/:_authToken=${ENGINEERING_DEV_TOOLS_INTERNAL_DEPLOY_PASSWORD}
+    - npm config set @engineering:registry=https://${CI_SERVER_HOST}/api/v4/groups/1234/-/packages/npm/
+    - npm install
+  script:
+    - npx semantic-release
